@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Numpad">
+<meta name="theme-color" content="#0e0f13">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon.png">
+<title>Web Numpad</title>
+<style>
+:root {
+  --bg: #0e0f13;
+  --bg-glow: #1a1d26;
+  --cap-hi: #353945;
+  --cap-lo: #23262f;
+  --side: #07080a;
+  --edge: #4a4f5e;
+  --legend: #f1f3f7;
+  --sub: #8a91a2;
+  --accent: #ffb224;
+  --accent-soft: rgba(255, 178, 36, .35);
+  --ok: #3ddc84;
+  --bad: #ff5d5d;
+  --depth: 7px;
+  --radius: 18px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
+  background: radial-gradient(120% 80% at 50% 0%, var(--bg-glow), var(--bg) 60%);
+  color: var(--legend);
+  font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  touch-action: none;
+}
+body { position: fixed; inset: 0; }
+#app {
+  height: 100%; display: flex; flex-direction: column; gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 12px)
+           calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
+}
+
+/* ---- верхняя полоса ---- */
+#bar { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 13px; color: var(--sub); }
+#status { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#led { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 8px var(--bad); flex: none; transition: background .2s, box-shadow .2s; }
+body.online #led { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.pill {
+  font: inherit; font-size: 12px; color: var(--sub); background: #171920; border: 1px solid #262a35;
+  border-radius: 999px; padding: 6px 11px; touch-action: manipulation;
+}
+.pill.on { color: #1a1300; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+/* ---- клавиатура ---- */
+#stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+#pad {
+  display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr); gap: 10px;
+  width: 100%; height: 100%; max-width: 520px; max-height: calc(100vw * 1.6);
+  transition: opacity .2s, filter .2s;
+}
+body:not(.online) #pad, body.paused #pad { opacity: .35; filter: saturate(.4); }
+body.paused #led { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+.key {
+  position: relative; border: 0; padding: 0; margin: 0; background: var(--side); color: inherit; font: inherit;
+  border-radius: var(--radius); touch-action: none; cursor: pointer; outline: none;
+  box-shadow: 0 10px 18px rgba(0,0,0,.45);
+}
+.key .cap {
+  position: absolute; inset: 0 0 var(--depth) 0; border-radius: calc(var(--radius) - 1px);
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
+  box-shadow: inset 0 1px 0 var(--edge), inset 0 -2px 0 rgba(0,0,0,.35);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  overflow: hidden;
+  transition: inset .12s cubic-bezier(.2,.9,.3,1.4), background .12s, box-shadow .12s;
+}
+.key b { font-size: clamp(22px, 7.4vw, 36px); font-weight: 600; line-height: 1; letter-spacing: .01em; transition: color .12s, text-shadow .12s; }
+.key i { font-style: normal; font-size: clamp(10px, 3vw, 13px); color: var(--sub); line-height: 1.1; transition: color .12s; }
+.key.word b { font-size: clamp(13px, 4.2vw, 19px); text-align: center; line-height: 1.15; }
+.key.tall { grid-row: span 2; }
+.key.wide { grid-column: span 2; }
+
+/* нажатие: колпачок уходит вниз, подсветка, вспышка от пальца */
+.key.down { box-shadow: 0 3px 8px rgba(0,0,0,.5); }
+.key.down .cap {
+  inset: calc(var(--depth) - 1px) 0 1px 0;
+  background: linear-gradient(180deg, #2b2a26, #1d1c1a);
+  box-shadow: inset 0 0 0 1.5px var(--accent), inset 0 0 22px var(--accent-soft), 0 0 18px var(--accent-soft);
+  transition-duration: .04s;
+}
+.key.down b { color: var(--accent); text-shadow: 0 0 14px var(--accent-soft); }
+.key.down i { color: var(--accent); }
+.key .cap::after {
+  content: ""; position: absolute; left: var(--px, 50%); top: var(--py, 50%); width: 10px; height: 10px;
+  margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none;
+}
+.key.flash .cap::after { animation: ripple .38s ease-out; }
+@keyframes ripple { from { opacity: .45; transform: scale(1); } to { opacity: 0; transform: scale(22); } }
+
+/* индикатор NumLock */
+.lamp { position: absolute; top: 9px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: #3a3f4c; transition: background .15s, box-shadow .15s; }
+body.numlock .lamp { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+/* ---- окно кода ---- */
+#pair {
+  position: fixed; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center;
+  background: rgba(8, 9, 12, .86); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  padding: 24px; touch-action: manipulation;
+}
+body.pairing #pair { display: flex; }
+#pair form { width: 100%; max-width: 320px; text-align: center; }
+#pair h1 { font-size: 22px; margin: 0 0 6px; }
+#pair p { margin: 0 0 18px; color: var(--sub); font-size: 14px; line-height: 1.4; }
+#pin {
+  width: 100%; font: inherit; font-size: 32px; letter-spacing: .3em; text-align: center; color: var(--legend);
+  background: #171920; border: 1.5px solid #2c3140; border-radius: 16px; padding: 14px 8px; outline: none;
+  -webkit-user-select: text; user-select: text;
+}
+#pin:focus { border-color: var(--accent); }
+#pair button {
+  width: 100%; margin-top: 14px; font: inherit; font-size: 17px; font-weight: 600; color: #1a1300;
+  background: var(--accent); border: 0; border-radius: 16px; padding: 14px; touch-action: manipulation;
+}
+#pairmsg { min-height: 20px; margin-top: 12px; color: var(--bad); font-size: 14px; }
+
+@media (orientation: landscape) and (max-height: 520px) {
+  #app { flex-direction: row; }
+  #bar { flex-direction: column; align-items: stretch; width: 120px; }
+  #status { flex: none; white-space: normal; }
+  #pad { max-width: none; max-height: none; width: auto; height: 100%; aspect-ratio: 4 / 4.2; }
+  .key b { font-size: clamp(16px, 7vh, 30px); }
+  .key i { font-size: clamp(9px, 2.6vh, 12px); }
+  .key.word b { font-size: clamp(11px, 3.8vh, 16px); }
+}
+@media (prefers-reduced-motion: reduce) { .key .cap, .key.flash .cap::after { transition: none; animation: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <div id="status"><span id="led"></span><span id="statustext">Подключение…</span></div>
+    <button class="pill" id="optSound" type="button">Звук</button>
+    <button class="pill" id="optHaptic" type="button">Вибро</button>
+    <button class="pill" id="optRepeat" type="button">Повтор</button>
+  </div>
+  <div id="stage">
+    <div id="pad">
+      <button class="key word" data-k="numlock" type="button"><span class="cap"><span class="lamp"></span><b>Num<br>Lock</b></span></button>
+      <button class="key" data-k="div" type="button"><span class="cap"><b>/</b></span></button>
+      <button class="key" data-k="mul" type="button"><span class="cap"><b>*</b></span></button>
+      <button class="key" data-k="sub" type="button"><span class="cap"><b>−</b></span></button>
+
+      <button class="key" data-k="n7" type="button"><span class="cap"><b>7</b><i>Home</i></span></button>
+      <button class="key" data-k="n8" type="button"><span class="cap"><b>8</b><i>↑</i></span></button>
+      <button class="key" data-k="n9" type="button"><span class="cap"><b>9</b><i>PgUp</i></span></button>
+      <button class="key" data-k="add" type="button"><span class="cap"><b>+</b></span></button>
+
+      <button class="key" data-k="n4" type="button"><span class="cap"><b>4</b><i>←</i></span></button>
+      <button class="key" data-k="n5" type="button"><span class="cap"><b>5</b></span></button>
+      <button class="key" data-k="n6" type="button"><span class="cap"><b>6</b><i>→</i></span></button>
+      <button class="key word" data-k="back" type="button"><span class="cap"><b>Back<br>Space</b></span></button>
+
+      <button class="key" data-k="n1" type="button"><span class="cap"><b>1</b><i>End</i></span></button>
+      <button class="key" data-k="n2" type="button"><span class="cap"><b>2</b><i>↓</i></span></button>
+      <button class="key" data-k="n3" type="button"><span class="cap"><b>3</b><i>PgDn</i></span></button>
+      <button class="key word tall" data-k="enter" type="button"><span class="cap"><b>Enter</b></span></button>
+
+      <button class="key wide" data-k="n0" type="button"><span class="cap"><b>0</b><i>Ins</i></span></button>
+      <button class="key" data-k="dot" type="button"><span class="cap"><b>.</b><i>Del</i></span></button>
+    </div>
+  </div>
+</div>
+
+<div id="pair">
+  <form id="pairform" autocomplete="off" novalidate>
+    <h1>Сопряжение</h1>
+    <p>Отсканируйте QR-код в окне Web Numpad на компьютере или введите шесть цифр под ним.</p>
+    <input id="pin" type="text" inputmode="numeric" maxlength="7" placeholder="000 000" autocomplete="one-time-code">
+    <button type="submit">Подключить</button>
+    <div id="pairmsg"></div>
+  </form>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const body = document.body;
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('numpad.' + k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('numpad.' + k, v); } catch {} },
+    del(k) { try { localStorage.removeItem('numpad.' + k); } catch {} },
+  };
+
+  // ---------- настройки ----------
+  const opts = {
+    sound: store.get('sound', '0') === '1',
+    haptic: store.get('haptic', '1') === '1',
+    repeat: store.get('repeat', '0') === '1',
+  };
+  const pills = { sound: $('optSound'), haptic: $('optHaptic'), repeat: $('optRepeat') };
+  function paintOpts() { for (const k in pills) pills[k].classList.toggle('on', opts[k]); }
+  for (const k in pills) {
+    pills[k].addEventListener('click', () => {
+      opts[k] = !opts[k];
+      store.set(k, opts[k] ? '1' : '0');
+      paintOpts();
+      if (k === 'repeat') send({ t: 'cfg', repeat: opts.repeat });
+      if (k === 'sound' && opts.sound) click();
+      if (k === 'haptic' && opts.haptic) haptic();
+    });
+  }
+  paintOpts();
+
+  // ---------- звук и отдача ----------
+  let audio = null;
+  function click(up) {
+    if (!opts.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const t = audio.currentTime, o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(up ? 1500 : 950, t);
+      o.frequency.exponentialRampToValueAtTime(up ? 900 : 320, t + 0.03);
+      g.gain.setValueAtTime(up ? 0.05 : 0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+      o.connect(g).connect(audio.destination);
+      o.start(t); o.stop(t + 0.05);
+    } catch {}
+  }
+  // В Safari на айфоне нет вибрации для сайтов. Обходной путь: «щелчок» системного переключателя.
+  const hapticLabel = document.createElement('label');
+  hapticLabel.style.cssText = 'position:fixed;left:-200px;top:-200px;opacity:0;pointer-events:none';
+  const hapticSwitch = document.createElement('input');
+  hapticSwitch.type = 'checkbox'; hapticSwitch.setAttribute('switch', ''); hapticSwitch.tabIndex = -1;
+  hapticLabel.appendChild(hapticSwitch); body.appendChild(hapticLabel);
+  function haptic() {
+    if (!opts.haptic) return;
+    try { if (navigator.vibrate) navigator.vibrate(8); else hapticLabel.click(); } catch {}
+  }
+
+  // ---------- код из QR ----------
+  // QR на ПК ведёт на адрес вида http://ПК:порт/#pin=123456. Код остаётся в адресе,
+  // чтобы ярлык «На экран „Домой“» тоже подключался сам (у ярлыка своё хранилище).
+  function hashPin() {
+    // Код ищем во всём адресе: сканер может отдать его как «#pin=», «?pin=» или «%23pin=».
+    // После сопряжения адрес приводится к виду «/#pin=…».
+    let href = location.href;
+    try { href = decodeURIComponent(href); } catch {}
+    const m = /[#?&]pin=(\d{6})/.exec(href);
+    return m ? m[1] : '';
+  }
+  function setHashPin(pin) {
+    try { history.replaceState(null, '', '/' + (pin ? '#pin=' + pin : '')); } catch {}
+  }
+
+  // ---------- связь с ПК ----------
+  let ws = null, authed = false, dry = false, retry = 0, pingTimer = null, lastPong = 0;
+  const statusText = $('statustext');
+  function setStatus(text) { statusText.textContent = text; }
+  function send(obj) { if (ws && ws.readyState === 1 && (authed || obj.t === 'auth')) ws.send(JSON.stringify(obj)); }
+
+  function connect() {
+    setStatus('Подключение…');
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    ws.onopen = () => {
+      retry = 0;
+      const pin = hashPin() || store.get('pin', '');
+      if (pin) ws.send(JSON.stringify({ t: 'auth', pin })); else showPair('');
+    };
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.t === 'auth') {
+        if (m.ok) {
+          authed = true; dry = !!m.dry; body.classList.add('online'); body.classList.remove('pairing');
+          if (m.pin) { store.set('pin', m.pin); setHashPin(m.pin); }
+          body.classList.toggle('numlock', !!m.numlock);
+          setStatus(m.dry ? 'Тестовый режим: клавиши не нажимаются' : 'Подключено');
+          send({ t: 'cfg', repeat: opts.repeat });
+          lastPong = performance.now();
+          clearInterval(pingTimer);
+          pingTimer = setInterval(() => send({ t: 'p', ts: performance.now() }), 700);
+        } else {
+          store.del('pin'); setHashPin('');
+          showPair(m.locked ? `Слишком много попыток. Подождите ${m.locked} с.` : 'Код не подошёл.');
+        }
+      } else if (m.t === 'q') {
+        lastPong = performance.now();
+        body.classList.toggle('numlock', !!m.numlock);
+        body.classList.toggle('paused', !!m.paused);
+        if (m.paused) setStatus('Ввод приостановлен на ПК');
+        else if (typeof m.ts === 'number' && !statusText.dataset.sticky && !dry) setStatus(`Подключено · ${Math.max(1, Math.round(performance.now() - m.ts))} мс`);
+      } else if (m.t === 'err') {
+        statusText.dataset.sticky = '1';
+        setStatus('ПК не принял нажатие: активно окно с правами администратора');
+        setTimeout(() => { delete statusText.dataset.sticky; }, 4000);
+      } else if (m.t === 'released') {
+        releaseAllLocal();
+      }
+    };
+    ws.onclose = () => {
+      authed = false; clearInterval(pingTimer); body.classList.remove('online'); releaseAllLocal();
+      setStatus('Нет связи с ПК. Переподключение…');
+      retry = Math.min(retry + 1, 6);
+      setTimeout(connect, 250 * retry);
+    };
+    ws.onerror = () => { try { ws.close(); } catch {} };
+  }
+
+  // ---------- сопряжение ----------
+  const pinInput = $('pin'), pairMsg = $('pairmsg');
+  function showPair(message) {
+    pairMsg.textContent = message; body.classList.add('pairing');
+    setStatus('Нужен код сопряжения');
+  }
+  pinInput.addEventListener('input', () => {
+    const d = pinInput.value.replace(/\D/g, '').slice(0, 6);
+    pinInput.value = d.length > 3 ? d.slice(0, 3) + ' ' + d.slice(3) : d;
+  });
+  $('pairform').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pin = pinInput.value.replace(/\D/g, '');
+    if (pin.length !== 6) { pairMsg.textContent = 'Нужно шесть цифр.'; return; }
+    pairMsg.textContent = '';
+    store.set('pin', pin);
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'auth', pin }));
+    pinInput.blur();
+  });
+
+  // ---------- клавиши ----------
+  const pointers = new Map();   // палец -> клавиша
+  const held = new Map();       // клавиша -> сколько пальцев её держит
+  const keyEl = {};
+  document.querySelectorAll('.key').forEach((el) => { keyEl[el.dataset.k] = el; });
+
+  function press(el, e) {
+    const k = el.dataset.k;
+    if (pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, k);
+    const n = (held.get(k) || 0) + 1;
+    held.set(k, n);
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--px', (e.clientX - r.left) + 'px');
+    el.style.setProperty('--py', (e.clientY - r.top) + 'px');
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('down', 'flash');
+    if (n === 1) { send({ t: 'd', k }); haptic(); click(false); }
+  }
+  function release(e) {
+    const k = pointers.get(e.pointerId);
+    if (!k) return;
+    pointers.delete(e.pointerId);
+    const n = (held.get(k) || 1) - 1;
+    if (n <= 0) { held.delete(k); keyEl[k].classList.remove('down'); send({ t: 'u', k }); click(true); }
+    else held.set(k, n);
+  }
+  function releaseAllLocal() {
+    pointers.clear(); held.clear();
+    for (const k in keyEl) keyEl[k].classList.remove('down');
+  }
+  function releaseAll() { send({ t: 'allup' }); releaseAllLocal(); }
+
+  for (const k in keyEl) {
+    const el = keyEl[k];
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!authed) return;
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      press(el, e);
+    }, { passive: false });
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+    el.addEventListener('lostpointercapture', release);
+  }
+
+  // Страницу свернули, экран погас, вкладку закрыли — всё отпустить.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+  window.addEventListener('pagehide', releaseAll);
+  window.addEventListener('blur', releaseAll);
+
+  // Никаких зумов, выделений и меню: это клавиатура.
+  for (const type of ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick', 'selectstart'])
+    document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => { if (!body.classList.contains('pairing')) e.preventDefault(); }, { passive: false });
+
+  // Связь пропала молча (например, Wi-Fi отвалился) — показать это.
+  setInterval(() => {
+    if (authed && performance.now() - lastPong > 3000) { try { ws.close(); } catch {} }
+  }, 1000);
+
+  connect();
+})();
+</script>
+</body>
+</html>

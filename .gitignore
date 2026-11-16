@@ -1,0 +1,13 @@
+# окружение и сборка
+.venv/
+__pycache__/
+build/
+dist/
+*.spec
+WebNumpad.exe
+WebNumpad.old.exe
+
+# личные настройки: здесь код сопряжения
+numpad_config.json
+config.json
+log.txt
